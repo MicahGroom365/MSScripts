@@ -1,0 +1,102 @@
+<# Script to Add a User to a Selected Distribution List with GUI
+Prerequisites:
+- Exchange Online Management module installed
+- Appropriate admin privileges
+#>
+
+# Add-Type for Windows Forms
+Add-Type -AssemblyName System.Windows.Forms
+
+# Function to connect to Exchange Online
+function Connect-Exchange {
+    try {
+        Connect-ExchangeOnline
+        [System.Windows.Forms.MessageBox]::Show("Successfully connected to Exchange Online!", "Connection Success", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    } catch {
+        [System.Windows.Forms.MessageBox]::Show("Failed to connect to Exchange Online. Check your credentials.", "Connection Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        exit
+    }
+}
+
+# Function to fetch distribution lists
+function Fetch-DistributionLists {
+    $DistributionLists = Get-DistributionGroup -ResultSize Unlimited
+
+    if ($DistributionLists.Count -eq 0) {
+        [System.Windows.Forms.MessageBox]::Show("No distribution lists found.", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        Disconnect-ExchangeOnline -Confirm:$false
+        exit
+    }
+
+    return $DistributionLists
+}
+
+# Function to create the GUI
+function Create-GUI {
+    # Form setup
+    $Form = New-Object System.Windows.Forms.Form
+    $Form.Text = "Add User to Distribution List"
+    $Form.Size = New-Object System.Drawing.Size(500, 400)
+    $Form.StartPosition = "CenterScreen"
+
+    # Dropdown for distribution lists
+    $DropdownLabel = New-Object System.Windows.Forms.Label
+    $DropdownLabel.Text = "Select a Distribution List:"
+    $DropdownLabel.Location = New-Object System.Drawing.Point(10, 20)
+    $DropdownLabel.Size = New-Object System.Drawing.Size(200, 20)
+    $Form.Controls.Add($DropdownLabel)
+
+    $Dropdown = New-Object System.Windows.Forms.ComboBox
+    $Dropdown.Location = New-Object System.Drawing.Point(10, 50)
+    $Dropdown.Size = New-Object System.Drawing.Size(450, 20)
+    $Form.Controls.Add($Dropdown)
+
+    # Textbox for email address
+    $EmailLabel = New-Object System.Windows.Forms.Label
+    $EmailLabel.Text = "Enter Email Address to Add:"
+    $EmailLabel.Location = New-Object System.Drawing.Point(10, 100)
+    $EmailLabel.Size = New-Object System.Drawing.Size(200, 20)
+    $Form.Controls.Add($EmailLabel)
+
+    $EmailTextBox = New-Object System.Windows.Forms.TextBox
+    $EmailTextBox.Location = New-Object System.Drawing.Point(10, 130)
+    $EmailTextBox.Size = New-Object System.Drawing.Size(450, 20)
+    $Form.Controls.Add($EmailTextBox)
+
+    # Button to add user
+    $AddButton = New-Object System.Windows.Forms.Button
+    $AddButton.Text = "Add User"
+    $AddButton.Location = New-Object System.Drawing.Point(10, 200)
+    $AddButton.Size = New-Object System.Drawing.Size(100, 30)
+    $AddButton.Add_Click({
+        $SelectedList = $Dropdown.SelectedItem
+        $EmailToAdd = $EmailTextBox.Text
+
+        if (-Not $SelectedList -or -Not $EmailToAdd) {
+            [System.Windows.Forms.MessageBox]::Show("Please select a distribution list and enter an email address.", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+            return
+        }
+
+        try {
+            Add-DistributionGroupMember -Identity $SelectedList -Member $EmailToAdd -ErrorAction Stop
+            [System.Windows.Forms.MessageBox]::Show("Successfully added $EmailToAdd to $SelectedList!", "Success", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        } catch {
+            [System.Windows.Forms.MessageBox]::Show("Failed to add $EmailToAdd to $SelectedList. Error: $_", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        }
+    })
+    $Form.Controls.Add($AddButton)
+
+    # Populate dropdown with distribution lists
+    $DistributionLists = Fetch-DistributionLists
+    foreach ($List in $DistributionLists) {
+        $Dropdown.Items.Add($List.PrimarySmtpAddress)
+    }
+
+    # Run the form
+    $Form.Add_Shown({$Form.Activate()})
+    [System.Windows.Forms.Application]::Run($Form)
+}
+
+# Main Script Logic
+Connect-Exchange
+Create-GUI
