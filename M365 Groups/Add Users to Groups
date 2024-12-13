@@ -1,0 +1,49 @@
+# Requires the Microsoft Graph PowerShell module
+# Install the module if not already installed: Install-Module Microsoft.Graph -Scope CurrentUser
+
+# Import the Microsoft Graph PowerShell module
+Import-Module Microsoft.Graph
+
+# Connect to Microsoft Graph
+Connect-MgGraph -Scopes "Group.ReadWrite.All"
+
+# Get all Microsoft 365 Groups
+$groups = Get-MgGroup -Filter "groupTypes/any(c:c eq 'Unified')" -All
+
+# Display groups with numbered list
+$groups | ForEach-Object -Begin { $i = 1 } -Process {
+    Write-Host "$i. $_.DisplayName (ID: $_.Id)"
+    $i++
+}
+
+# Prompt user to select a group
+$groupNumber = Read-Host "Enter the number of the group you want to add members to"
+$selectedGroup = $groups[$groupNumber - 1]
+
+if (-not $selectedGroup) {
+    Write-Host "Invalid selection. Exiting..."
+    return
+}
+
+Write-Host "Selected Group: $($selectedGroup.DisplayName)"
+
+# Prompt user for members to add
+$memberEmails = Read-Host "Enter email addresses of members to add, separated by commas"
+$members = $memberEmails -split "," | ForEach-Object { $_.Trim() }
+
+# Add each member to the selected group
+foreach ($email in $members) {
+    try {
+        $user = Get-MgUser -Filter "userPrincipalName eq '$email'"
+        if ($user) {
+            Add-MgGroupMember -GroupId $selectedGroup.Id -DirectoryObjectId $user.Id
+            Write-Host "Added $email to $($selectedGroup.DisplayName)"
+        } else {
+            Write-Host "User $email not found"
+        }
+    } catch {
+        Write-Host "Error adding $email: $_"
+    }
+}
+
+Write-Host "Finished adding members."
